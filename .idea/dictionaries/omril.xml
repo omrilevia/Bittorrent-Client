@@ -10,6 +10,7 @@
       <w>pstrlen</w>
       <w>recvd</w>
       <w>torrentdict</w>
+      <w>torrentinfo</w>
       <w>trackerconn</w>
       <w>trackerconnector</w>
     </words>
