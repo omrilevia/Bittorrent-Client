@@ -37,7 +37,7 @@ class TrackerConnector:
             portNum = struct.unpack(">H", peerPort)[0]
 
             peerDict = {
-                'IP': peerIP,
+                'IP': ipaddress.IPv4Address(peerIP).exploded,
                 'port': portNum
             }
             peerList.append(peerDict)

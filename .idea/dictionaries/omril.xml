@@ -2,10 +2,16 @@
   <dictionary name="omril">
     <words>
       <w>bencode</w>
+      <w>ibiii</w>
       <w>metainfo</w>
       <w>newpath</w>
       <w>outdir</w>
+      <w>pstr</w>
+      <w>pstrlen</w>
+      <w>recvd</w>
       <w>torrentdict</w>
+      <w>trackerconn</w>
+      <w>trackerconnector</w>
     </words>
   </dictionary>
 </component>
