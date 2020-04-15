@@ -44,7 +44,7 @@ class MultiProcessor(multiprocessing.Process):
             except socket.error:
                 peer.healthy_connection = False
                 continue
-            self.peerConnector.handleMessage(read_data)
+            self.peerConnector.handleMessage(read_data, peer)
 
 
 class PeerConnector:
@@ -59,9 +59,19 @@ class PeerConnector:
             peers.append(Peer(peer['IP'], peer['port'], self.info_hash))
         return peers
 
-    def handleMessage(self, message):
-        length, = struct.unpack(">I", message[:1])
-        
+    def handleMessage(self, message, peer):
+        pstr_length, = struct.unpack(">B", message[:1])
+        if pstr_length == 19:
+            rx_handshake = Messages.HandShake.deserialize(message)
+            if rx_handshake.info_hash != peer.info_hash:
+                self.peers.remove(peer)
+            peer.peer_id = rx_handshake.peer_id
+            peer.made_handshake = True
+            interested = Messages.Interested.serialize()
+            peer.write_data = interested
+            peer.peer_state["am_interested"] = 1
+        else:
+            m_len, m_id = struct.unpack(">IB", message[:5])
 
 
 
