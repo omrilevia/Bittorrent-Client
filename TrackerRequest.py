@@ -2,6 +2,13 @@ import requests
 from bcoding import bdecode
 import ipaddress
 import struct
+import logging
+"""
+The tracker connector makes a request to the torrent tracker using
+the properly formatted parameters. 
+"""
+
+logging = logging.getLogger("TrackerConnector")
 
 
 class TrackerConnector:
@@ -24,6 +31,7 @@ class TrackerConnector:
         return params
 
     def makeRequest(self):
+        logging.info("making request to tracker")
         return bdecode(requests.get(self.metainfo.announce, self.params).content)
 
     def peerByteStringToList(self):

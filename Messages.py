@@ -1,6 +1,10 @@
 import struct
 import bitstring
 
+"""
+All types of messages may be serialized and deserialized here for ease of sending and receiving.
+"""
+
 
 class HandShake:
     def __init__(self, info_hash, peer_id):
@@ -22,7 +26,7 @@ class HandShake:
     def deserialize(cls, recvd):
         pstrlen, = struct.unpack(">B", recvd[:1])
         pstr, reserved, info_hash, peer_id = struct.unpack(">{}s8s20s20s".format(pstrlen), recvd[1:len(recvd)])
-        assert (pstr == "BitTorrent protocol")
+        # assert (pstr == "BitTorrent protocol")
 
         return HandShake(info_hash, peer_id)
 
@@ -138,9 +142,10 @@ class Bitfield:
                            self.id,
                            self.serialBf)
 
-    def deserialize(self, recvd):
+    @classmethod
+    def deserialize(cls, recvd):
         m_length, m_id = struct.unpack(">IB", recvd[:5])
-        assert (m_id == self.id)
+        # assert (m_id == self.id)
         bf_length = m_length - 1
         bf_serial, = struct.unpack(">{}s".format(bf_length), recvd[5:5 + bf_length])
         bitfield = bitstring.BitArray(bytes=bytes(bf_serial))
@@ -186,6 +191,6 @@ class Piece:
         block_len = len(recvd) - 13
         m_length, m_id, idx, m_offset, blck = struct.unpack(">IBII{}s".format(block_len),
                                                             recvd[:13 + block_len])
-        assert(m_id == self.id)
+        assert (m_id == self.id)
 
         return Piece(idx, m_offset, blck)

@@ -2,8 +2,11 @@
   <dictionary name="omril">
     <words>
       <w>bencode</w>
+      <w>fileno</w>
+      <w>ibii</w>
       <w>ibiii</w>
       <w>metainfo</w>
+      <w>mysock</w>
       <w>newpath</w>
       <w>outdir</w>
       <w>pstr</w>
