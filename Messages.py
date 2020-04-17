@@ -162,7 +162,7 @@ class Request:
         self.tot_length = 17
 
     def serialize(self):
-        return struct.pack(">IBIII", self.prefix_length, self.id, self.index, self.begin, self.length)
+        return struct.pack(">IBIII", self.prefix_length, self.id, self.index, self.begin, self.block_length)
 
     def deserialize(self, recvd):
         m_length, m_id, idx, beg, block_len = struct.unpack(">IBIII", recvd[:self.tot_length])
@@ -187,10 +187,11 @@ class Piece:
                            self.begin,
                            self.block)
 
-    def deserialize(self, recvd):
+    @classmethod
+    def deserialize(cls, recvd):
         block_len = len(recvd) - 13
         m_length, m_id, idx, m_offset, blck = struct.unpack(">IBII{}s".format(block_len),
                                                             recvd[:13 + block_len])
-        assert (m_id == self.id)
+        # assert (m_id == self.id)
 
         return Piece(idx, m_offset, blck)

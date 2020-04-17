@@ -48,7 +48,7 @@ class MultiProcessor(multiprocessing.Process):
                 print(write_message)
                 try:
                     if peer.healthy_connection:
-                        print('writing to peers')
+                        # print('writing to peers')
                         peer.socket.send(write_message)
                 except socket.error as e:
                     peer.healthy_connection = False
@@ -103,6 +103,7 @@ class PeerConnector:
                 peer.peer_state["peer_choking"] = 1
             elif m_id == 1:
                 peer.peer_state["peer_choking"] = 0
+                self.makePieceRequest(peer)
             elif m_id == 2:
                 peer.peer_state["peer_interested"] = 1
             elif m_id == 3:
@@ -118,7 +119,25 @@ class PeerConnector:
                 pass
             elif m_id == 7:
                 piece = Messages.Piece.deserialize(message)
-                self.piece_tracker.handle_piece(piece)
+                self.piece_tracker.handlePiece(piece)
+                if peer.peer_state["peer_choking"] == 0:
+                    self.makePieceRequest(peer)
+
+    def makePieceRequest(self, peer):
+        current_piece = self.piece_tracker.current_piece
+        idx = int(current_piece["index"])
+        block_length = 2 ** 14
+        offset = current_piece["offset"]
+        block_idx = int(offset / block_length)
+        if not self.piece_tracker.block_requested[idx][block_idx] and peer.has_piece(idx):
+            request = Messages.Request(idx, offset, block_length).serialize()
+            peer.write_data = request
+            self.piece_tracker.block_requested[idx][block_idx] = True
+            self.piece_tracker.current_piece["offset"] += block_length
+            if self.piece_tracker.current_piece["offset"] == self.piece_tracker.piece_size:
+                self.piece_tracker.current_piece["index"] += 1
+                self.piece_tracker.current_piece["offset"] = 0
+
 
 
 class Peer:
@@ -141,3 +160,6 @@ class Peer:
 
     def fileno(self):
         return self.socket.fileno()
+
+    def has_piece(self, index):
+        return self.bitfield[index]
