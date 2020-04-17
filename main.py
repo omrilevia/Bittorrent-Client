@@ -14,10 +14,10 @@ def main():
     pieceTracker = PieceTracker.PieceTracker(torr.piecesHashList, torr.numPieces, torr.pieceSize)
     peerConnect = PeerConnector(tracker, torr, pieceTracker)
     hs = Messages.HandShake(torr.info_hash, torr.peer_id).serialize()
-    print(hs)
+    #print(hs)
     peers = peerConnect.peers
     peer = peerConnect.peers[0]
-    print(peer.write_data)
+    #print(peer.write_data)
     # try:
     #     peer.socket.send(hs)
     #     data = peer.socket.recv(1028)

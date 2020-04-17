@@ -30,6 +30,11 @@ class PieceTracker:
         index = piece.index
         begin = piece.begin
         block = piece.block
+        #self.current_piece["index"] += 1
+        self.current_piece["offset"] += self.block_size
+        if self.current_piece["offset"] == self.piece_size:
+            self.current_piece["index"] += 1
+            self.current_piece["offset"] = 0
         if not [pc for pc in self.pieces if pc.idx == index]:
             if index == self.num_pieces - 1:
                 # handle last piece
@@ -37,16 +42,16 @@ class PieceTracker:
             else:
                 hash_offset = 20 * index
                 piece_hash = self.pieces_hash[hash_offset: 20 + hash_offset]
-                new_piece = Pieze(index, piece_hash, self.piece_size, self.num_pieces)
+                new_piece = Piece(index, piece_hash, self.piece_size, self.num_pieces)
                 block_index = int(begin / self.block_size)
                 new_piece.blocks[block_index] = block
                 new_piece.block_bool[block_index] = True
                 new_piece.blocks_added += 1
-                self.pieces.append(piece)
+                self.pieces.append(new_piece)
         else:
             pc = [pc for pc in self.pieces if pc.idx == index]
             pc = pc[0]
-            block_index = begin / pc.block_size
+            block_index = int(begin / pc.block_size)
             pc.blocks[block_index] = block
             pc.block_bool[block_index] = True
             pc.blocks_added += 1
@@ -56,7 +61,7 @@ class PieceTracker:
                 # if not match reset
 
 
-class Pieze:
+class Piece:
     def __init__(self, idx, piece_hash, piece_size, num_pieces):
         self.idx = idx
         self.piece_hash = piece_hash

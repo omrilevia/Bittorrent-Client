@@ -61,7 +61,7 @@ class MultiProcessor(multiprocessing.Process):
                     if peer.healthy_connection:
                         read_data = peer.socket.recv(4096)
                         if read_data:
-                            print('received from peer')
+                            # print('received from peer')
                             self.peerConnector.handleMessage(read_data, peer)
                 except socket.error as e:
                     peer.healthy_connection = False
@@ -75,6 +75,7 @@ class PeerConnector:
         self.info_hash = metainfo.info_hash
         self.my_peer_id = metainfo.peer_id
         self.piece_tracker = pieceTracker
+        self.num_pieces = metainfo.numPieces
         self.peers = self.makePeers()
 
     def makePeers(self):
@@ -82,7 +83,7 @@ class PeerConnector:
         for peer in self.peerList:
             try:
                 sock = socket.create_connection((peer['IP'], peer['port']), timeout=2)
-                peers.append(Peer(peer['IP'], peer['port'], self.info_hash, self.my_peer_id, sock))
+                peers.append(Peer(self.num_pieces, peer['IP'], peer['port'], self.info_hash, self.my_peer_id, sock))
             except socket.error:
                 pass
         return peers
@@ -133,22 +134,17 @@ class PeerConnector:
             request = Messages.Request(idx, offset, block_length).serialize()
             peer.write_data = request
             self.piece_tracker.block_requested[idx][block_idx] = True
-            self.piece_tracker.current_piece["offset"] += block_length
-            if self.piece_tracker.current_piece["offset"] == self.piece_tracker.piece_size:
-                self.piece_tracker.current_piece["index"] += 1
-                self.piece_tracker.current_piece["offset"] = 0
-
 
 
 class Peer:
-    def __init__(self, ip, port, info_hash, my_peer_id, sock):
+    def __init__(self, num_pieces, ip, port, info_hash, my_peer_id, sock):
         self.ip = ip
         self.port = port
         self.socket = sock
         self.my_peer_id = my_peer_id
         self.peer_id = b''
         self.info_hash = info_hash
-        self.bitfield = None
+        self.bitfield = bitstring.BitArray(num_pieces)
         self.made_handshake = False
         self.healthy_connection = True
         self.peer_state = {"am_choking": 1,
