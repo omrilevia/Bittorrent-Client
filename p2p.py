@@ -15,6 +15,7 @@ import struct
 import bitstring
 import PieceTracker
 import logging
+import time
 from threading import Thread
 
 logging = logging.getLogger('mp')
@@ -35,38 +36,46 @@ class MultiProcessor(multiprocessing.Process):
         #         print('connection made')
         #     except Exception as e:
         #         print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
-        print('entering while loop')
         while not self.pieceTracker.haveAllPieces():
             # print('entering while loop')
             write = [peer for peer in self.peerConnector.peers if peer.write_data != '']
-            # print(write)
             read = self.peerConnector.peers[:]
             rx_list, tx_list, x_list = select.select(read, write, [])
 
             for peer in tx_list:
                 write_message = peer.write_data
-                print(write_message)
                 try:
                     if peer.healthy_connection:
                         # print('writing to peers')
                         peer.socket.send(write_message)
                 except socket.error as e:
                     peer.healthy_connection = False
-                    print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
+                    # print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
                     continue
                 peer.write_data = ''
 
             for peer in rx_list:
                 try:
                     if peer.healthy_connection:
-                        read_data = peer.socket.recv(4096)
+                        read_data = peer.socket.recv(1028)
                         if read_data:
                             # print('received from peer')
-                            self.peerConnector.handleMessage(read_data, peer)
+                            if peer.made_handshake:
+                                m_len, m_id = struct.unpack(">IB", read_data[:5])
+                                if m_len <= 16393:
+                                    self.peerConnector.handleMessage(read_data, peer)
+                            else:
+                                self.peerConnector.handleMessage(read_data, peer)
                 except socket.error as e:
-                    peer.healthy_connection = False
-                    print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
+                    # peer.healthy_connection = False
+                    # print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
                     continue
+                #print(peer.ip)
+                time.sleep(.2)
+                if peer.made_handshake and peer.peer_state["peer_choking"] == 0:
+                    peer.timer = time.time()
+                    #print(peer.ip, "entering request")
+                    self.peerConnector.makePieceRequest(peer)
 
 
 class PeerConnector:
@@ -89,8 +98,14 @@ class PeerConnector:
         return peers
 
     def handleMessage(self, message, peer):
+        total_length = len(message)
+        remaining = False
         if not peer.made_handshake:
-            rx_handshake = Messages.HandShake.deserialize(message)
+            if total_length > 68:
+                rx_handshake = Messages.HandShake.deserialize(message[:68])
+                remaining = True
+            else:
+                rx_handshake = Messages.HandShake.deserialize(message)
             if rx_handshake.info_hash != peer.info_hash:
                 self.peers.remove(peer)
             peer.peer_id = rx_handshake.peer_id
@@ -98,13 +113,17 @@ class PeerConnector:
             interested = Messages.Interested().serialize()
             peer.write_data = interested
             peer.peer_state["am_interested"] = 1
+            if remaining:
+                self.handleMultiple(message[68:], peer)
         else:
             m_len, m_id = struct.unpack(">IB", message[:5])
             if m_id == 0:
                 peer.peer_state["peer_choking"] = 1
             elif m_id == 1:
                 peer.peer_state["peer_choking"] = 0
-                self.makePieceRequest(peer)
+                peer.can_send = True
+                # self.makePieceRequest(peer)
+                # peer.timer = time.time()
             elif m_id == 2:
                 peer.peer_state["peer_interested"] = 1
             elif m_id == 3:
@@ -118,22 +137,45 @@ class PeerConnector:
             elif m_id == 6:
                 # peer requests piece
                 pass
-            elif m_id == 7:
+            elif m_id == 7 and m_len == 16393:
                 piece = Messages.Piece.deserialize(message)
                 self.piece_tracker.handlePiece(piece)
-                if peer.peer_state["peer_choking"] == 0:
-                    self.makePieceRequest(peer)
+                peer.can_send = True
+
+    def handleMultiple(self, message, peer):
+        total_length = len(message)
+        parsed = 0
+        while parsed < total_length:
+            m_len, m_id = struct.unpack(">IB", message[parsed:parsed + 5])
+            m_total = m_len + 4
+            self.handleMessage(message[parsed:m_total + parsed], peer)
+            parsed += m_total
 
     def makePieceRequest(self, peer):
-        current_piece = self.piece_tracker.current_piece
+        current_piece = peer.current_piece
         idx = int(current_piece["index"])
+        # print(peer.ip, idx)
         block_length = 2 ** 14
         offset = current_piece["offset"]
         block_idx = int(offset / block_length)
-        if not self.piece_tracker.block_requested[idx][block_idx] and peer.has_piece(idx):
-            request = Messages.Request(idx, offset, block_length).serialize()
-            peer.write_data = request
-            self.piece_tracker.block_requested[idx][block_idx] = True
+        while not peer.has_piece(idx) or self.piece_tracker.block_requested[idx][block_idx]:
+            offset += block_length
+            # print(offset)
+            block_idx = int(offset / block_length)
+            if offset == self.piece_tracker.piece_size:
+                idx += 1
+                offset = 0
+                block_idx = 0
+        request = Messages.Request(idx, offset, block_length).serialize()
+        peer.write_data = request
+        self.piece_tracker.block_requested[idx][block_idx] = True
+        peer.can_send = False
+        offset += block_length
+        if offset == self.piece_tracker.piece_size:
+            idx += 1
+            offset = 0
+            block_idx = 0
+        peer.current_piece = {"index": idx, "offset": offset}
 
 
 class Peer:
@@ -141,12 +183,15 @@ class Peer:
         self.ip = ip
         self.port = port
         self.socket = sock
+        self.timer = 0.0
+        self.can_send = False
         self.my_peer_id = my_peer_id
         self.peer_id = b''
         self.info_hash = info_hash
         self.bitfield = bitstring.BitArray(num_pieces)
         self.made_handshake = False
         self.healthy_connection = True
+        self.current_piece = {"index": 0, "offset": 0}
         self.peer_state = {"am_choking": 1,
                            "am_interested": 0,
                            "peer_choking": 1,

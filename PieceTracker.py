@@ -30,11 +30,6 @@ class PieceTracker:
         index = piece.index
         begin = piece.begin
         block = piece.block
-        #self.current_piece["index"] += 1
-        self.current_piece["offset"] += self.block_size
-        if self.current_piece["offset"] == self.piece_size:
-            self.current_piece["index"] += 1
-            self.current_piece["offset"] = 0
         if not [pc for pc in self.pieces if pc.idx == index]:
             if index == self.num_pieces - 1:
                 # handle last piece
