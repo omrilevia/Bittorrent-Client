@@ -10,6 +10,7 @@ import PieceTracker
 def main():
     torr = MetaInfo('charlie_chaplin_film_fest_archive.torrent')
     torr.storeMetaData()
+    print(torr.numPieces)
     tracker = TrackerConnector(torr)
     pieceTracker = PieceTracker.PieceTracker(torr.piecesHashList, torr.numPieces, torr.pieceSize)
     peerConnect = PeerConnector(tracker, torr, pieceTracker)

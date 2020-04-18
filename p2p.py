@@ -71,11 +71,11 @@ class MultiProcessor(multiprocessing.Process):
                     # print("something's wrong with %s:%d. Exception is %s" % (peer.ip, peer.port, e))
                     continue
                 #print(peer.ip)
-                time.sleep(.2)
-                if peer.made_handshake and peer.peer_state["peer_choking"] == 0:
-                    peer.timer = time.time()
-                    #print(peer.ip, "entering request")
-                    self.peerConnector.makePieceRequest(peer)
+                #time.sleep(.2)
+                # if peer.made_handshake and peer.peer_state["peer_choking"] == 0:
+                #     peer.timer = time.time()
+                #     #print(peer.ip, "entering request")
+                #     self.peerConnector.makePieceRequest(peer)
 
 
 class PeerConnector:
@@ -122,7 +122,7 @@ class PeerConnector:
             elif m_id == 1:
                 peer.peer_state["peer_choking"] = 0
                 peer.can_send = True
-                # self.makePieceRequest(peer)
+                self.makePieceRequest(peer)
                 # peer.timer = time.time()
             elif m_id == 2:
                 peer.peer_state["peer_interested"] = 1
@@ -140,6 +140,7 @@ class PeerConnector:
             elif m_id == 7 and m_len == 16393:
                 piece = Messages.Piece.deserialize(message)
                 self.piece_tracker.handlePiece(piece)
+                self.makePieceRequest(peer)
                 peer.can_send = True
 
     def handleMultiple(self, message, peer):
