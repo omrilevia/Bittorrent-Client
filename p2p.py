@@ -62,6 +62,7 @@ class MultiProcessor(multiprocessing.Process):
                             # print('received from peer')
                             if peer.made_handshake:
                                 m_len, m_id = struct.unpack(">IB", read_data[:5])
+                                print(m_len, m_id)
                                 if m_len <= 16393:
                                     self.peerConnector.handleMessage(read_data, peer)
                             else:
@@ -119,26 +120,29 @@ class PeerConnector:
             m_len, m_id = struct.unpack(">IB", message[:5])
             if m_id == 0:
                 peer.peer_state["peer_choking"] = 1
-            elif m_id == 1:
+            elif m_id == 1 and m_len == 1:
                 peer.peer_state["peer_choking"] = 0
                 peer.can_send = True
                 self.makePieceRequest(peer)
                 # peer.timer = time.time()
-            elif m_id == 2:
+            elif m_id == 2 and m_len == 1:
                 peer.peer_state["peer_interested"] = 1
-            elif m_id == 3:
+            elif m_id == 3 and m_len == 1:
                 peer.peer_state["peer_interested"] = 0
             elif m_id == 4:
                 # need to test bitfield logic
                 pass
-            elif m_id == 5:
+            elif m_id == 5 and self.num_pieces == (m_len - 1) * 8:
                 bf = Messages.Bitfield.deserialize(message)
                 peer.bitfield = bf.bitfield
+               # print("Bitfield bytes length:", len(peer.bitfield))
+               # print("Binary length:", len(peer.bitfield.bin))
             elif m_id == 6:
                 # peer requests piece
                 pass
             elif m_id == 7 and m_len == 16393:
                 piece = Messages.Piece.deserialize(message)
+                print("Received piece with index: ", piece.index)
                 self.piece_tracker.handlePiece(piece)
                 self.makePieceRequest(peer)
                 peer.can_send = True
