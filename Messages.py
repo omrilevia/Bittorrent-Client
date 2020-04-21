@@ -121,9 +121,10 @@ class Have:
     def serialize(self):
         return struct.pack(">IBI", self.length_prefix, self.id, self.piece_index)
 
-    def deserialize(self, recvd):
-        m_length, m_id, pieceIdx = struct.unpack(">IBI", recvd[:self.length])
-        assert (m_id == 4)
+    @classmethod
+    def deserialize(cls, recvd):
+        m_length, m_id, pieceIdx = struct.unpack(">IBI", recvd[:9])
+        #assert (m_id == 4)
         return Have(pieceIdx)
 
 

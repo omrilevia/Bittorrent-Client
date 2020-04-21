@@ -38,16 +38,25 @@ class TrackerConnector:
         peerData = self.response['peers']
         peerInfo = [peerData[i:i + 6] for i in range(0, len(peerData), 6)]
         peerList = []
-        for peer in peerInfo:
-            peerIP = peer[:4]
-            peerPort = peer[4:]
-            peerPort = bytes(peerPort)
-            portNum = struct.unpack(">H", peerPort)[0]
+        if type(peerData) is list:
+            for peer in peerData:
+                peerDict = {
+                    'IP': peer['ip'],
+                    'port': peer['port']
+                }
+                peerList.append(peerDict)
+        else:
+            for peer in peerInfo:
+                peerIP = peer[:4]
+                peerPort = peer[4:]
+                #print(peerPort)
+                peerPort = bytes(peerPort)
+                portNum = struct.unpack(">H", peerPort)[0]
 
-            peerDict = {
-                'IP': ipaddress.IPv4Address(peerIP).exploded,
-                'port': portNum
-            }
-            peerList.append(peerDict)
+                peerDict = {
+                    'IP': ipaddress.IPv4Address(peerIP).exploded,
+                    'port': portNum
+                }
+                peerList.append(peerDict)
 
         return peerList

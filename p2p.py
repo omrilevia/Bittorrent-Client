@@ -27,6 +27,16 @@ class MultiProcessor(multiprocessing.Process):
         self.tId = tId
         self.peerConnector = peerConnect
         self.pieceTracker = pieceTracker
+        self.message_id_length = {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 5,
+            "5": self.pieceTracker.num_pieces / 8 + 1,
+            "6": 13,
+            "7": 16393
+        }
 
     def run(self):
         # for peer in self.peerConnector.peers:
@@ -57,13 +67,20 @@ class MultiProcessor(multiprocessing.Process):
             for peer in rx_list:
                 try:
                     if peer.healthy_connection:
-                        read_data = peer.socket.recv(1028)
+                        read_data = peer.socket.recv(4096)
                         if read_data:
                             # print('received from peer')
-                            if peer.made_handshake:
+                            try:
                                 m_len, m_id = struct.unpack(">IB", read_data[:5])
-                                print(m_len, m_id)
-                                if m_len <= 16393:
+                            except struct.error as e:
+                                pass
+
+                            if not peer.made_handshake:
+                                if len(read_data) > 68:
+                                    #print("Handshake length > 68 ", peer.ip, len(read_data))
+                                    self.peerConnector.handleMessage(read_data[:68], peer)
+                                    self.peerConnector.handleMultiple(read_data[68:], peer)
+                                else:
                                     self.peerConnector.handleMessage(read_data, peer)
                             else:
                                 self.peerConnector.handleMessage(read_data, peer)
@@ -77,6 +94,7 @@ class MultiProcessor(multiprocessing.Process):
                 #     peer.timer = time.time()
                 #     #print(peer.ip, "entering request")
                 #     self.peerConnector.makePieceRequest(peer)
+        print("have all pieces")
 
 
 class PeerConnector:
@@ -100,13 +118,8 @@ class PeerConnector:
 
     def handleMessage(self, message, peer):
         total_length = len(message)
-        remaining = False
         if not peer.made_handshake:
-            if total_length > 68:
-                rx_handshake = Messages.HandShake.deserialize(message[:68])
-                remaining = True
-            else:
-                rx_handshake = Messages.HandShake.deserialize(message)
+            rx_handshake = Messages.HandShake.deserialize(message)
             if rx_handshake.info_hash != peer.info_hash:
                 self.peers.remove(peer)
             peer.peer_id = rx_handshake.peer_id
@@ -114,24 +127,24 @@ class PeerConnector:
             interested = Messages.Interested().serialize()
             peer.write_data = interested
             peer.peer_state["am_interested"] = 1
-            if remaining:
-                self.handleMultiple(message[68:], peer)
         else:
+            if len(message) < 5:
+                return
             m_len, m_id = struct.unpack(">IB", message[:5])
             if m_id == 0:
                 peer.peer_state["peer_choking"] = 1
             elif m_id == 1 and m_len == 1:
                 peer.peer_state["peer_choking"] = 0
                 peer.can_send = True
-                self.makePieceRequest(peer)
+                self.makePieceRequest()
                 # peer.timer = time.time()
             elif m_id == 2 and m_len == 1:
                 peer.peer_state["peer_interested"] = 1
             elif m_id == 3 and m_len == 1:
                 peer.peer_state["peer_interested"] = 0
-            elif m_id == 4:
-                # need to test bitfield logic
-                pass
+            elif m_id == 4 and m_len == 5:
+                have = Messages.Have.deserialize(message)
+                peer.bitfield[have.piece_index] = True
             elif m_id == 5 and self.num_pieces == (m_len - 1) * 8:
                 bf = Messages.Bitfield.deserialize(message)
                 peer.bitfield = bf.bitfield
@@ -142,9 +155,9 @@ class PeerConnector:
                 pass
             elif m_id == 7 and m_len == 16393:
                 piece = Messages.Piece.deserialize(message)
-                print("Received piece with index: ", piece.index)
+                #print("Received piece with index: ", piece.index)
                 self.piece_tracker.handlePiece(piece)
-                self.makePieceRequest(peer)
+                self.makePieceRequest()
                 peer.can_send = True
 
     def handleMultiple(self, message, peer):
@@ -153,34 +166,39 @@ class PeerConnector:
         while parsed < total_length:
             m_len, m_id = struct.unpack(">IB", message[parsed:parsed + 5])
             m_total = m_len + 4
+            #print(m_len, total_length, parsed, m_id, peer.made_handshake, peer.ip)
+            m_total = m_len + 4
             self.handleMessage(message[parsed:m_total + parsed], peer)
             parsed += m_total
 
-    def makePieceRequest(self, peer):
-        current_piece = peer.current_piece
-        idx = int(current_piece["index"])
-        # print(peer.ip, idx)
-        block_length = 2 ** 14
-        offset = current_piece["offset"]
-        block_idx = int(offset / block_length)
-        while not peer.has_piece(idx) or self.piece_tracker.block_requested[idx][block_idx]:
-            offset += block_length
-            # print(offset)
+    def makePieceRequest(self):
+        #print(idx, peer.bitfield, peer.ip)
+        for peer in self.peers:
+            current_piece = peer.current_piece
+            idx = int(current_piece["index"])
+            # print(peer.ip, idx)
+            block_length = 2 ** 14
+            offset = current_piece["offset"]
             block_idx = int(offset / block_length)
-            if offset == self.piece_tracker.piece_size:
-                idx += 1
-                offset = 0
-                block_idx = 0
-        request = Messages.Request(idx, offset, block_length).serialize()
-        peer.write_data = request
-        self.piece_tracker.block_requested[idx][block_idx] = True
-        peer.can_send = False
-        offset += block_length
-        if offset == self.piece_tracker.piece_size:
-            idx += 1
-            offset = 0
-            block_idx = 0
-        peer.current_piece = {"index": idx, "offset": offset}
+            if peer.bitfield and peer.peer_state['peer_choking'] == 0:
+                while not peer.has_piece(idx) or self.piece_tracker.block_requested[idx][block_idx]:
+                    offset += block_length
+                    # print(offset)
+                    block_idx = int(offset / block_length)
+                    if offset == self.piece_tracker.piece_size:
+                        idx += 1
+                        offset = 0
+                        block_idx = 0
+                request = Messages.Request(idx, offset, block_length).serialize()
+                peer.write_data = request
+                self.piece_tracker.block_requested[idx][block_idx] = True
+                peer.can_send = False
+                offset += block_length
+                if offset == self.piece_tracker.piece_size:
+                    idx += 1
+                    offset = 0
+                    block_idx = 0
+                peer.current_piece = {"index": idx, "offset": offset}
 
 
 class Peer:
@@ -208,4 +226,5 @@ class Peer:
         return self.socket.fileno()
 
     def has_piece(self, index):
+        #print(index, self.bitfield, self.ip)
         return self.bitfield[index]
