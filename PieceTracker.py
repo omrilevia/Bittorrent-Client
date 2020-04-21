@@ -8,12 +8,14 @@ import hashlib
 
 
 class PieceTracker:
-    def __init__(self, piecesHashList, num_pieces, piece_size):
+    def __init__(self, piecesHashList, num_pieces, piece_size, total_length):
         self.pieces_hash = piecesHashList
         self.pieces = []
         self.num_pieces = num_pieces
         self.piece_size = piece_size
         self.block_size = 2 ** 14
+        self.total_length = total_length
+        self.last_piece_size = self.total_length - (self.num_pieces - 1) * piece_size
         self.num_blocks = math.ceil(float(self.piece_size) / self.block_size)
         self.current_piece = {"index": 0, "offset": 0}
         self.block_requested = [[False for x in range(self.num_blocks)] for y in range(self.num_pieces)]

@@ -8,19 +8,21 @@ import PieceTracker
 
 
 def main():
-    torr = MetaInfo('charlie_chaplin_film_fest_archive.torrent')
+    torr = MetaInfo('Bromberg2012-07-19.Creekside.MilabVM-44Link.flac16.torrent')
     torr.storeMetaData()
     # print(torr.numPieces)
     tracker = TrackerConnector(torr)
-    pieceTracker = PieceTracker.PieceTracker(torr.piecesHashList, torr.numPieces, torr.pieceSize)
+    pieceTracker = PieceTracker.PieceTracker(torr.piecesHashList, torr.numPieces, torr.pieceSize, torr.totalLength)
     peerConnect = PeerConnector(tracker, torr, pieceTracker)
+    tot = (pieceTracker.num_pieces - 1) * pieceTracker.piece_size + pieceTracker.last_piece_size
+    print(pieceTracker.total_length, tot)
     hs = Messages.HandShake(torr.info_hash, torr.peer_id).serialize()
     peers = peerConnect.peers
     # print(peers)
     # peer = peerConnect.peers[0]
 
-    mp = MultiProcessor(1, peerConnect, pieceTracker)
-    mp.run()
+    #mp = MultiProcessor(1, peerConnect, pieceTracker)
+    #mp.run()
 
 
 if __name__ == '__main__':
