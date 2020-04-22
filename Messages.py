@@ -124,7 +124,7 @@ class Have:
     @classmethod
     def deserialize(cls, recvd):
         m_length, m_id, pieceIdx = struct.unpack(">IBI", recvd[:9])
-        #assert (m_id == 4)
+        # assert (m_id == 4)
         return Have(pieceIdx)
 
 
@@ -196,3 +196,21 @@ class Piece:
         # assert (m_id == self.id)
 
         return Piece(idx, m_offset, blck)
+
+
+class Cancel:
+    def __init__(self, index, begin, block_length):
+        self.index = index
+        self.begin = begin
+        self.block_length = block_length
+        self.prefix_length = 13
+        self.id = 8
+        self.tot_length = 17
+
+    def serialize(self):
+        return struct.pack(">IBIII", self.prefix_length, self.id, self.index, self.begin, self.block_length)
+
+    def deserialize(self, recvd):
+        m_length, m_id, idx, beg, block_len = struct.unpack(">IBIII", recvd[:self.tot_length])
+        # assert (m_id == 6)
+        return Request(idx, beg, block_len)

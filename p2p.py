@@ -8,6 +8,7 @@ Multiprocessor:
 """
 import socket
 import Messages
+import math
 from TorrentInfo import MetaInfo
 import select
 import multiprocessing
@@ -80,6 +81,8 @@ class PeerConnector:
         self.piece_tracker = pieceTracker
         self.num_pieces = metainfo.numPieces
         self.peers = self.makePeers()
+        self.endgame = False
+        self.piece_order = []
 
     def makePeers(self):
         peers = []
@@ -107,11 +110,11 @@ class PeerConnector:
                 peer.peer_state["am_interested"] = 1
                 peer.read_data = peer.read_data[68:]
             else:
-                #print(len(peer.read_data))
+                # print(len(peer.read_data))
                 m_len, m_id = struct.unpack(">IB", peer.read_data[:5])
-                #print(m_len, m_id, peer.ip)
+                # print(m_len, m_id, peer.ip)
                 content = peer.read_data[5:4 + m_len]
-                print(m_len, m_id, len(peer.read_data), peer.ip)
+                # print(m_len, m_id, len(peer.read_data), peer.ip)
                 full_message = peer.read_data[:4 + m_len]
                 if len(content) < m_len - 1:
                     return
@@ -131,10 +134,13 @@ class PeerConnector:
                 elif m_id == 4:
                     have = Messages.Have.deserialize(full_message)
                     peer.bitfield[have.piece_index] = True
+                    self.rarestFirstPieces()
                 elif m_id == 5:
                     print("received bitfield from ", peer.ip, "with length ", len(full_message))
+
                     bf = Messages.Bitfield.deserialize(full_message)
                     peer.bitfield = bf.bitfield
+                    self.rarestFirstPieces()
                 # print("Bitfield bytes length:", len(peer.bitfield))
                 # print("Binary length:", len(peer.bitfield.bin))
                 elif m_id == 6:
@@ -143,23 +149,46 @@ class PeerConnector:
                 elif m_id == 7:
                     piece = Messages.Piece.deserialize(full_message)
                     # print("Received piece with index: ", piece.index)
+                    peer.num_requests -= 1
+                    # peer.write_data = ''
+
                     self.piece_tracker.handlePiece(piece)
-                    self.makePieceRequest()
-                    peer.can_send = True
+                    if self.piece_tracker.completedPieces() / self.num_pieces < .99:
+                        self.makePieceRequest()
+                    elif self.endgame is False:
+                        self.endGame()
+                        self.endgame = True
+                    elif self.endgame is True:
+                        index = piece.index
+                        offset = piece.begin
+                        length = piece.block_length
+                        cancel = Messages.Cancel(index, offset, length).serialize()
+                        for pr in self.peers:
+                            if peer != pr:
+                                pr.write_data = cancel
+
 
         return
 
-    def makePieceRequest(self):
-        # print(idx, peer.bitfield, peer.ip)
+    def rarestFirstPieces(self):
+        rarest_first = [{"index": x, "count": 0} for x in range(self.num_pieces)]
         for peer in self.peers:
-            current_piece = peer.current_piece
-            idx = int(current_piece["index"])
+            for pc in range(self.num_pieces):
+                if peer.has_piece(pc):
+                    rarest_first[pc]["count"] += 1
+        self.piece_order = sorted(rarest_first, key=lambda i: i['count'])
+
+    def makePieceRequest(self):
+        for peer in self.peers:
+            # time.sleep(.125)
+            idx = self.piece_order[0]["index"]
             # print(peer.ip, idx)
             block_length = 2 ** 14
-            offset = current_piece["offset"]
-            block_idx = int(offset / block_length)
-            #print(peer.peer_state['peer_choking'], peer.ip)
-            if peer.bitfield and peer.peer_state['peer_choking'] == 0 and idx < self.num_pieces:
+            offset = 0
+            block_idx = math.floor(offset / block_length)
+            # print(peer.peer_state['peer_choking'], peer.ip)
+            if peer.bitfield and peer.peer_state['peer_choking'] == 0 and idx < self.num_pieces \
+                    and peer.num_requests < 5:
                 while not peer.has_piece(idx) or self.piece_tracker.block_requested[idx][block_idx]:
                     offset += block_length
                     # print(offset)
@@ -168,18 +197,37 @@ class PeerConnector:
                         idx += 1
                         offset = 0
                         block_idx = 0
-                request = Messages.Request(idx, offset, block_length).serialize()
+                # print(idx)
+                if idx == self.num_pieces - 1:
+                    request = Messages.Request(idx, offset, self.piece_tracker.last_block_size).serialize()
+                else:
+                    request = Messages.Request(idx, offset, block_length).serialize()
                 peer.write_data = request
+                peer.num_requests += 1
                 self.piece_tracker.block_requested[idx][block_idx] = True
+                # self.requests_outstanding += 1
                 peer.can_send = False
                 offset += block_length
                 if offset == self.piece_tracker.piece_size:
                     idx += 1
                     offset = 0
                     block_idx = 0
-                peer.current_piece = {"index": idx, "offset": offset}
-            if idx == self.num_pieces - 1:
-                print("Last piece reached!!")
+                    # self.piece_tracker.current_piece = {"index": idx, "offset": offset}
+
+    def endGame(self):
+        pieces_remaining = [pc for pc in self.piece_tracker.pieces if pc.complete is False]
+        request = b''
+        for peer in self.peers:
+            for pc in pieces_remaining:
+                index = pc.idx
+                for block in range(len(pc.blocks)):
+                    offset = block * pc.block_size
+                    if pc.block_bool[block] is False and peer.has_piece(index):
+                        if index == self.num_pieces - 1 and block == pc.num_blocks - 1:
+                            request += Messages.Request(index, offset, pc.last_block_size).serialize()
+                        else:
+                            request += Messages.Request(index, offset, pc.block_size).serialize()
+            peer.write_data = request
 
 
 class Peer:
@@ -195,6 +243,7 @@ class Peer:
         self.bitfield = bitstring.BitArray(num_pieces)
         self.made_handshake = False
         self.healthy_connection = True
+        self.num_requests = 0
         self.current_piece = {"index": 0, "offset": 0}
         self.peer_state = {"am_choking": 1,
                            "am_interested": 0,
@@ -208,7 +257,7 @@ class Peer:
 
     def has_piece(self, index):
         # print(index, self.bitfield, self.ip)
-        if 0 < index < len(self.bitfield):
+        if 0 <= index < len(self.bitfield):
             return self.bitfield[index]
         else:
             return False
