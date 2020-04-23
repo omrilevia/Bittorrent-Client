@@ -166,7 +166,7 @@ class PeerConnector:
                         for pr in self.peers:
                             if peer != pr:
                                 pr.write_data = cancel
-
+                        # self.endGame()
 
         return
 
@@ -216,18 +216,40 @@ class PeerConnector:
 
     def endGame(self):
         pieces_remaining = [pc for pc in self.piece_tracker.pieces if pc.complete is False]
+        pieces_not_requested = []
+        for i in range(self.num_pieces):
+            if i not in [pc.idx for pc in self.piece_tracker.pieces]:
+                pieces_not_requested.append(i)
+
         request = b''
         for peer in self.peers:
-            for pc in pieces_remaining:
-                index = pc.idx
-                for block in range(len(pc.blocks)):
-                    offset = block * pc.block_size
-                    if pc.block_bool[block] is False and peer.has_piece(index):
-                        if index == self.num_pieces - 1 and block == pc.num_blocks - 1:
-                            request += Messages.Request(index, offset, pc.last_block_size).serialize()
-                        else:
-                            request += Messages.Request(index, offset, pc.block_size).serialize()
-            peer.write_data = request
+            if peer.peer_state["peer_choking"] == 0:
+                for pc in pieces_remaining:
+                    index = pc.idx
+                    print(pc.idx)
+                    for block in range(len(pc.blocks)):
+                        offset = block * pc.block_size
+                        if pc.block_bool[block] is False and peer.has_piece(index):
+                            if index == self.num_pieces - 1 and block == pc.num_blocks - 1:
+                                request += Messages.Request(index, offset, pc.last_block_size).serialize()
+                            else:
+                                request += Messages.Request(index, offset, pc.block_size).serialize()
+
+                for index in pieces_not_requested:
+                    print(index)
+                    if index == self.num_pieces - 1:
+                        for block in range(len(self.piece_tracker.num_blocks_in_last_piece)):
+                            offset = block * self.piece_tracker.block_size
+                            if block == self.piece_tracker.num_blocks_in_last_piece - 1:
+                                request += Messages.Request(index, offset, self.piece_tracker.last_block_size).serialize()
+                            else:
+                                request += Messages.Request(index, offset, self.piece_tracker.block_size).serialize()
+                    else:
+                        for block in range(len(self.piece_tracker.num_blocks)):
+                            offset = block * self.piece_tracker.block_size
+                            request += Messages.Request(index, offset, self.piece_tracker.block_size).serialize()
+
+                peer.write_data = request
 
 
 class Peer:
