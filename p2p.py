@@ -226,7 +226,7 @@ class PeerConnector:
             if peer.peer_state["peer_choking"] == 0:
                 for pc in pieces_remaining:
                     index = pc.idx
-                    print(pc.idx)
+                    # print(pc.idx)
                     for block in range(len(pc.blocks)):
                         offset = block * pc.block_size
                         if pc.block_bool[block] is False and peer.has_piece(index):
@@ -236,16 +236,16 @@ class PeerConnector:
                                 request += Messages.Request(index, offset, pc.block_size).serialize()
 
                 for index in pieces_not_requested:
-                    print(index)
+                    # print(index)
                     if index == self.num_pieces - 1:
-                        for block in range(len(self.piece_tracker.num_blocks_in_last_piece)):
+                        for block in range(self.piece_tracker.num_blocks_in_last_piece):
                             offset = block * self.piece_tracker.block_size
                             if block == self.piece_tracker.num_blocks_in_last_piece - 1:
                                 request += Messages.Request(index, offset, self.piece_tracker.last_block_size).serialize()
                             else:
                                 request += Messages.Request(index, offset, self.piece_tracker.block_size).serialize()
                     else:
-                        for block in range(len(self.piece_tracker.num_blocks)):
+                        for block in range(self.piece_tracker.num_blocks):
                             offset = block * self.piece_tracker.block_size
                             request += Messages.Request(index, offset, self.piece_tracker.block_size).serialize()
 
