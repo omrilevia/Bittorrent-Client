@@ -22,6 +22,7 @@ def main():
 
     mp = MultiProcessor(1, peerConnect, pieceTracker)
     mp.run()
+    torr.writeFiles('C:', pieceTracker)
 
 
 if __name__ == '__main__':

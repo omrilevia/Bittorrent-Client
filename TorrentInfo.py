@@ -3,6 +3,7 @@ import math
 import time
 import os
 import hashlib
+import PieceTracker
 
 
 class MetaInfo:
@@ -18,6 +19,7 @@ class MetaInfo:
         self.totalLength = 0
         self.files = {}
         self.peer_id = ''
+        self.all_pieces = b''
 
     def storeMetaData(self):
         with open(self.path, 'rb') as f:
@@ -60,3 +62,22 @@ class MetaInfo:
         pid = str(os.getpid())
         toHash = ts + pid
         self.peer_id = hashlib.sha1(toHash.encode('utf-8')).digest()
+
+    def writeFiles(self, path, pieceTracker: PieceTracker):
+        piece_data = [pc.piece_data for pc in pieceTracker.pieces]
+        self.all_pieces = b''.join(piece_data)
+        bytes_written = 0
+        if 'files' in self.torrentdict['info']:
+            path += '/' + self.torrentdict['info']['name'] + '/'
+            for file in self.files:
+                fpath = path + '/'.join(file['path'])
+                if not os.path.exists(os.path.dirname(fpath)):
+                    os.makedirs(os.path.dirname(fpath))
+                with open(fpath, 'wb') as outfile:
+                    length = file['length']
+                    outfile.write(self.all_pieces[bytes_written:length+bytes_written])
+                    bytes_written += length
+                    outfile.close()
+
+
+

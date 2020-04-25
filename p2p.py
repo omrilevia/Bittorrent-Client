@@ -241,7 +241,8 @@ class PeerConnector:
                         for block in range(self.piece_tracker.num_blocks_in_last_piece):
                             offset = block * self.piece_tracker.block_size
                             if block == self.piece_tracker.num_blocks_in_last_piece - 1:
-                                request += Messages.Request(index, offset, self.piece_tracker.last_block_size).serialize()
+                                request += Messages.Request(index, offset,
+                                                            self.piece_tracker.last_block_size).serialize()
                             else:
                                 request += Messages.Request(index, offset, self.piece_tracker.block_size).serialize()
                     else:
