@@ -1,5 +1,4 @@
 # Bittorrent-Client
-## Work in progress
 Bittorrent client written in python by Omri Levia
 
 
@@ -11,9 +10,17 @@ nearing completion, the client will request all unobtained pieces to each peer a
 
 This client does not yet support accepting requests from other peers. 
 
-Some outstanding items yet to complete: 
-* writing files to disk 
-* piece verification upon completion 
+This bittorrent client can:
+* Connect to the tracker and receive a list of peers
+* Connect and handshake with peers
+* Request pieces from peers
+* Write torrent to disk in desired output folder
+
+Possible extensions:
+* Revision of rarest piece and endgame strategy (needs further optimizations)
+* Support uploading to peers (satisfy requests)
+* Graphical user interface
+* Implement recommended extensions by the Bittorrent Wiki
 
 Some comments on optimization:
 As it stands now, the program waits until all pieces are obtained before writing to disk, so for systems with minimal RAM this may be cumbersome.
