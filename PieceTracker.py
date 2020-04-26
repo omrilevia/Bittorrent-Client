@@ -59,12 +59,12 @@ class PieceTracker:
                 pc.block_bool[block_index] = True
                 pc.blocks_added += 1
                 if pc.blocks_added == pc.num_blocks:
-                    print('Joining piece with index', pc.idx)
+                    # print('Joining piece with index', pc.idx)
                     pc.piece_data = b''.join(pc.blocks)
                     if pc.verify():
                         pc.complete = True
-                        # print("Piece complete with index: ", pc.idx, "Percentage: ",
-                          # self.completedPieces() / self.num_pieces)
+                        print("Piece complete with index: ", pc.idx, "Percentage: ",
+                              self.completedPieces() / self.num_pieces)
                     else:
                         pc.reset()
                     # verify piece with piece_hash

@@ -4,25 +4,25 @@ import Messages
 from p2p import PeerConnector
 from p2p import MultiProcessor
 import socket
+import time
 import PieceTracker
 
 
 def main():
-    torr = MetaInfo('Bromberg2012-07-19.Creekside.MilabVM-44Link.flac16.torrent')
+    time1 = time.time()
+    torr = MetaInfo('torrents/vince2005-01-15.flac16.torrent')
     torr.storeMetaData()
-    # print(torr.numPieces)
+
     tracker = TrackerConnector(torr)
     pieceTracker = PieceTracker.PieceTracker(torr.piecesHashList, torr.numPieces, torr.pieceSize, torr.totalLength)
     peerConnect = PeerConnector(tracker, torr, pieceTracker)
-    # print(torr.files)
-    # tot = (pieceTracker.num_pieces - 1) * pieceTracker.piece_size + pieceTracker.last_piece_size
-    # print(pieceTracker.last_block_size, pieceTracker.num_blocks)
-    # print(peers)
-    # peer = peerConnect.peers[0]
 
     mp = MultiProcessor(1, peerConnect, pieceTracker)
     mp.run()
     torr.writeFiles('C:', pieceTracker)
+    time2 = time.time() - time1
+    print("Total time: ", time2)
+    print("Download speed: ", torr.totalLength / time2)
 
 
 if __name__ == '__main__':
